@@ -121,4 +121,18 @@ export const alunoService = {
     );
     return data;
   },
+
+  /**
+   * Consulta o status da integração com o Strava (US-14).
+   */
+  async obterStatusStrava(): Promise<{ conectado: boolean; expirado?: boolean; nomeAtleta?: string }> {
+    try {
+      const { data } = await api.get<{ conectado: boolean; expirado?: boolean; nomeAtleta?: string }>(
+        `${BASE_URL}/strava/status`
+      );
+      return data;
+    } catch {
+      return { conectado: false };
+    }
+  },
 };
