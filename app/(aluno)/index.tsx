@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   Activity,
   Flame,
@@ -17,7 +17,6 @@ import {
   Layers,
   Calendar,
   Clock,
-  Sparkles,
   ChevronRight,
   CheckCircle2,
   AlertTriangle,
@@ -119,21 +118,42 @@ export default function AlunoHomeScreen() {
 
           const todayIso = new Date().toISOString().split("T")[0];
 
-          // 1. Prioriza sessão planejada para hoje
-          // 2. Se não houver, próxima sessão pendente ("PLANEJADA")
-          // 3. Se todas concluídas, a última sessão
-          const pendingSession =
-            allSessions.find((s) => s.dataPlanejada === todayIso && s.status === "PLANEJADA") ||
-            allSessions.find((s) => s.status === "PLANEJADA") ||
-            allSessions.find((s) => s.dataPlanejada === todayIso) ||
-            allSessions[allSessions.length - 1] ||
-            null;
+          // 1. Procura sessões de hoje (planejadas ou realizadas na data atual)
+          const sessionsToday = allSessions.filter(
+            (s) => s.dataPlanejada === todayIso || s.dataReal === todayIso
+          );
 
-          setTodaySession(pendingSession);
+          // Se houver uma sessão pendente para hoje, essa é prioridade de execução
+          const pendingToday = sessionsToday.find(
+            (s) => s.status !== "CONCLUIDA" && !s.concluidaAluno
+          );
+
+          // Se houver uma sessão concluída hoje
+          const completedToday = sessionsToday.find(
+            (s) => s.status === "CONCLUIDA" || s.concluidaAluno
+          );
+
+          // Próxima sessão pendente geral em ordem cronológica
+          const nextPending = allSessions.find(
+            (s) => s.status !== "CONCLUIDA" && !s.concluidaAluno
+          );
+
+          let sessionToDisplay: SessaoTreinoResponseDTO | null = null;
+          if (pendingToday) {
+            sessionToDisplay = pendingToday;
+          } else if (completedToday) {
+            sessionToDisplay = completedToday;
+          } else if (nextPending) {
+            sessionToDisplay = nextPending;
+          } else {
+            sessionToDisplay = allSessions[allSessions.length - 1] || null;
+          }
+
+          setTodaySession(sessionToDisplay);
 
           // Verifica se há treino recente concluído sem RPE informado
           const needsRpe = allSessions.find(
-            (s) => s.status === "CONCLUIDA" && (s.desempenho?.nivelCansaco === null || s.desempenho?.nivelCansaco === undefined)
+            (s) => (s.status === "CONCLUIDA" || s.concluidaAluno) && (s.desempenho?.nivelCansaco === null || s.desempenho?.nivelCansaco === undefined)
           );
           setPendingRpeSession(needsRpe || null);
         } catch (planErr) {
@@ -148,9 +168,12 @@ export default function AlunoHomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+  // Recarrega os dados do painel sempre que a tela ganha foco (ao voltar de outra aba ou treino concluído)
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -317,14 +340,6 @@ export default function AlunoHomeScreen() {
               <Text style={styles.personalSubtitle}>Treinador: {personalName}</Text>
             </View>
           </TouchableOpacity>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Sparkles size={18} color={colors.primary[600]} />}
-            onPress={() => router.push("/modal")}
-            fullWidth={false}
-          />
         </View>
 
         {loading ? (
@@ -423,81 +438,142 @@ export default function AlunoHomeScreen() {
 
             {/* ROW 2: Próxima Sessão / Treino do Dia (Redesenhado Fiel à Web) */}
             {todaySession ? (
-              <Card variant="elevated" padding="none" style={styles.nextSessionCard}>
-                <View style={styles.nextSessionInner}>
-                  {/* Bloco de Data Laranja */}
-                  <View style={styles.dateBlock}>
-                    <Text style={styles.dateWeekday}>{dateBadge.weekday}</Text>
-                    <Text style={styles.dateDayMonth}>{dateBadge.dayMonth}</Text>
-                    <Text style={styles.dateTime}>
-                      {todaySession.duracao ? `${todaySession.duracao} min` : "Treino"}
-                    </Text>
-                  </View>
+              (() => {
+                const isSessionDone =
+                  todaySession.status === "CONCLUIDA" || Boolean(todaySession.concluidaAluno);
 
-                  {/* Conteúdo Principal */}
-                  <View style={styles.nextSessionContent}>
-                    <Text style={styles.nextEyebrow}>
-                      {todaySession.status === "CONCLUIDA"
-                        ? "SESSÃO FINALIZADA"
-                        : `PRÓXIMA SESSÃO · SEMANA ${todaySession.semana}`}
-                    </Text>
-
-                    <View style={styles.nextTitleRow}>
-                      <Text style={styles.nextTitle} numberOfLines={1}>
-                        {parsedToday.sessionName || `Sessão ${todaySession.semana}`}
-                      </Text>
-                      <SportTag sport={activeRoutine?.modalidade?.nome} size="sm" />
-                    </View>
-
-                    <Text style={styles.nextSubtitle} numberOfLines={2}>
-                      {activeRoutine?.titulo ? `${activeRoutine.titulo} · ` : ""}
-                      Planejado por {personalName}
-                    </Text>
-
-                    {/* Preview da Atividade Programada */}
-                    {parsedToday.activities.length > 0 && (
-                      <View style={styles.activityPill}>
-                        <View style={styles.activityNumBadge}>
-                          <Text style={styles.activityNumText}>1</Text>
-                        </View>
-                        <Text style={styles.activityPillText} numberOfLines={1}>
-                          <Text style={styles.activityPillBold}>
-                            {parsedToday.activities[0].title}
-                          </Text>
-                          {parsedToday.activities[0].description
-                            ? ` · ${parsedToday.activities[0].description}`
-                            : ""}
-                        </Text>
+                return (
+                  <Card variant="elevated" padding="none" style={styles.nextSessionCard}>
+                    <View style={styles.nextSessionInner}>
+                      {/* Bloco de Data (Laranja se pendente / Verde se concluído) */}
+                      <View
+                        style={[
+                          styles.dateBlock,
+                          isSessionDone && styles.dateBlockCompleted,
+                        ]}
+                      >
+                        {isSessionDone ? (
+                          <>
+                            <CheckCircle2 size={18} color={colors.surface} />
+                            <Text style={styles.dateWeekday}>FEITO</Text>
+                            <Text style={styles.dateDayMonth}>{dateBadge.dayMonth}</Text>
+                            <Text style={styles.dateTime}>
+                              {todaySession.duracao ? `${todaySession.duracao} min` : "Treino"}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.dateWeekday}>{dateBadge.weekday}</Text>
+                            <Text style={styles.dateDayMonth}>{dateBadge.dayMonth}</Text>
+                            <Text style={styles.dateTime}>
+                              {todaySession.duracao ? `${todaySession.duracao} min` : "Treino"}
+                            </Text>
+                          </>
+                        )}
                       </View>
-                    )}
 
-                    {/* Botões de Ação lado a lado */}
-                    <View style={styles.nextActionsRow}>
-                      <Button
-                        title="Ver sessão"
-                        variant="secondary"
-                        size="sm"
-                        onPress={() => router.push(`/(aluno)/treinos/${todaySession.id}`)}
-                        style={{ flex: 1 }}
-                      />
-                      <Button
-                        title={
-                          todaySession.status === "CONCLUIDA"
-                            ? "Rever Treino"
-                            : "Finalizar sessão"
-                        }
-                        variant="primary"
-                        size="sm"
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          router.push(`/(aluno)/treinos/${todaySession.id}`);
-                        }}
-                        style={{ flex: 1.2 }}
-                      />
+                      {/* Conteúdo Principal */}
+                      <View style={styles.nextSessionContent}>
+                        {isSessionDone ? (
+                          <View style={styles.eyebrowCompletedRow}>
+                            <CheckCircle2 size={12} color={colors.success.dark} />
+                            <Text style={styles.nextEyebrowCompleted}>SESSÃO FINALIZADA</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.nextEyebrow}>
+                            {`PRÓXIMA SESSÃO · SEMANA ${todaySession.semana}`}
+                          </Text>
+                        )}
+
+                        <View style={styles.nextTitleRow}>
+                          <Text style={styles.nextTitle} numberOfLines={1}>
+                            {parsedToday.sessionName || `Sessão ${todaySession.semana}`}
+                          </Text>
+                          <SportTag sport={activeRoutine?.modalidade?.nome} size="sm" />
+                        </View>
+
+                        <Text style={styles.nextSubtitle} numberOfLines={2}>
+                          {isSessionDone
+                            ? todaySession.desempenho?.nivelCansaco
+                              ? `Registrado com RPE ${todaySession.desempenho.nivelCansaco}/10 · Planejado por ${personalName}`
+                              : `Treino concluído com sucesso · Planejado por ${personalName}`
+                            : `${activeRoutine?.titulo ? `${activeRoutine.titulo} · ` : ""}Planejado por ${personalName}`}
+                        </Text>
+
+                        {/* Preview da Atividade Programada */}
+                        {parsedToday.activities.length > 0 && (
+                          <View style={styles.activityPill}>
+                            <View
+                              style={[
+                                styles.activityNumBadge,
+                                isSessionDone && styles.activityNumBadgeCompleted,
+                              ]}
+                            >
+                              {isSessionDone ? (
+                                <Check size={11} color={colors.surface} />
+                              ) : (
+                                <Text style={styles.activityNumText}>1</Text>
+                              )}
+                            </View>
+                            <Text style={styles.activityPillText} numberOfLines={1}>
+                              <Text style={styles.activityPillBold}>
+                                {parsedToday.activities[0].title}
+                              </Text>
+                              {parsedToday.activities[0].description
+                                ? ` · ${parsedToday.activities[0].description}`
+                                : ""}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Botões de Ação lado a lado */}
+                        {isSessionDone ? (
+                          <View style={styles.nextActionsRow}>
+                            <Button
+                              title="Ver detalhes"
+                              variant="secondary"
+                              size="sm"
+                              onPress={() => router.push(`/(aluno)/treinos/${todaySession.id}`)}
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              title="Ver cronograma"
+                              variant="primary"
+                              size="sm"
+                              icon={<Calendar size={14} color={colors.surface} />}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push("/(aluno)/treinos");
+                              }}
+                              style={{ flex: 1.1 }}
+                            />
+                          </View>
+                        ) : (
+                          <View style={styles.nextActionsRow}>
+                            <Button
+                              title="Ver sessão"
+                              variant="secondary"
+                              size="sm"
+                              onPress={() => router.push(`/(aluno)/treinos/${todaySession.id}`)}
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              title="Finalizar sessão"
+                              variant="primary"
+                              size="sm"
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                router.push(`/(aluno)/treinos/${todaySession.id}`);
+                              }}
+                              style={{ flex: 1.2 }}
+                            />
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                </View>
-              </Card>
+                  </Card>
+                );
+              })()
             ) : (
               <Card variant="outlined" padding="lg" style={styles.noWorkoutCard}>
                 <Text style={styles.noWorkoutTitle}>Todas as sessões concluídas!</Text>
@@ -830,6 +906,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     gap: 2,
   },
+  dateBlockCompleted: {
+    backgroundColor: colors.success.base,
+  },
   dateWeekday: {
     fontFamily: fonts.bold,
     fontSize: typography.sizes.tiny,
@@ -854,6 +933,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: typography.sizes.tiny,
     color: colors.primary[600],
+    letterSpacing: 0.5,
+  },
+  eyebrowCompletedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  nextEyebrowCompleted: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.tiny,
+    color: colors.success.dark,
     letterSpacing: 0.5,
   },
   nextTitleRow: {
@@ -891,6 +981,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[500],
     alignItems: "center",
     justifyContent: "center",
+  },
+  activityNumBadgeCompleted: {
+    backgroundColor: colors.success.base,
   },
   activityNumText: {
     fontFamily: fonts.bold,
