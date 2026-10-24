@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import {
   TrendingUp,
   Activity,
@@ -24,26 +25,42 @@ import type { DashboardEvolucaoResponseDTO } from "@/src/types/student";
 import { colors, fonts, radii, spacing, typography } from "@/src/theme/tokens";
 import { Card, Badge, SportTag, SvgLineChart, EmptyState } from "@/src/components/ui";
 
+function formatPointDate(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const parts = dateStr.split("-");
+    if (parts.length >= 3) {
+      return `${parts[2]}/${parts[1]}`;
+    }
+    return dateStr.slice(5);
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function AlunoEvolucaoScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardEvolucaoResponseDTO | null>(null);
 
-  async function loadEvolution() {
+  const loadEvolution = useCallback(async () => {
     try {
       const data = await alunoService.consultarEvolucao();
       setDashboard(data);
     } catch {
-      // Falha ao carregar
+      // Mantém estado resiliente em caso de falha de rede
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }
-
-  useEffect(() => {
-    loadEvolution();
   }, []);
+
+  // Recarrega automaticamente ao focar na aba de evolução
+  useFocusEffect(
+    useCallback(() => {
+      loadEvolution();
+    }, [loadEvolution])
+  );
 
   async function onRefresh() {
     setRefreshing(true);
@@ -52,7 +69,7 @@ export default function AlunoEvolucaoScreen() {
 
   const rpePoints =
     dashboard?.evolucaoRpe?.pontos?.map((p) => ({
-      label: p.data ? p.data.slice(5) : "", // MM-DD
+      label: formatPointDate(p.data),
       value: p.nivelCansaco,
     })) || [];
 
@@ -63,6 +80,7 @@ export default function AlunoEvolucaoScreen() {
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -72,8 +90,14 @@ export default function AlunoEvolucaoScreen() {
           />
         }
       >
+        {/* Cabeçalho da Tela */}
         <View style={styles.header}>
-          <Text style={styles.title}>Minha Evolução</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.title}>Minha Evolução</Text>
+            {dashboard?.modalidade && (
+              <SportTag sport={dashboard.modalidade.nome} size="sm" />
+            )}
+          </View>
           <Text style={styles.subtitle}>
             Progresso de carga, desempenho e percepção de esforço
           </Text>
@@ -94,60 +118,59 @@ export default function AlunoEvolucaoScreen() {
           />
         ) : (
           <>
-            {/* Modalidade Ativa */}
-            {dashboard?.modalidade && (
-              <View style={styles.modalityTagRow}>
-                <SportTag sport={dashboard.modalidade.nome} />
-              </View>
-            )}
-
-            {/* Cartões de Resumo Geral */}
+            {/* Cartões de Resumo Geral (Grid 3 Colunas Responsivo) */}
             {resumo && (
               <View style={styles.summaryGrid}>
                 <Card variant="elevated" padding="sm" style={styles.summaryCard}>
                   <View style={styles.summaryIconCircle}>
                     <CheckCircle2 size={16} color={colors.success.base} />
                   </View>
-                  <Text style={styles.summaryValue}>
+                  <Text style={styles.summaryValue} numberOfLines={1}>
                     {resumo.totalSessoesConcluidasPeriodo}
                   </Text>
-                  <Text style={styles.summaryLabel}>Treinos Feitos</Text>
+                  <Text style={styles.summaryLabel} numberOfLines={1}>
+                    Treinos Feitos
+                  </Text>
                 </Card>
 
                 <Card variant="elevated" padding="sm" style={styles.summaryCard}>
                   <View style={[styles.summaryIconCircle, { backgroundColor: colors.info.light }]}>
                     <Clock size={16} color={colors.info.base} />
                   </View>
-                  <Text style={styles.summaryValue}>
+                  <Text style={styles.summaryValue} numberOfLines={1}>
                     {resumo.duracaoMediaMinutos ? Math.round(resumo.duracaoMediaMinutos) : 0} min
                   </Text>
-                  <Text style={styles.summaryLabel}>Média Duração</Text>
+                  <Text style={styles.summaryLabel} numberOfLines={1}>
+                    Média Duração
+                  </Text>
                 </Card>
 
                 <Card variant="elevated" padding="sm" style={styles.summaryCard}>
                   <View style={[styles.summaryIconCircle, { backgroundColor: colors.primary[50] }]}>
                     <Percent size={16} color={colors.primary[500]} />
                   </View>
-                  <Text style={styles.summaryValue}>
+                  <Text style={styles.summaryValue} numberOfLines={1}>
                     {resumo.taxaAdesaoPercentual ? `${Math.round(resumo.taxaAdesaoPercentual)}%` : "0%"}
                   </Text>
-                  <Text style={styles.summaryLabel}>Adesão</Text>
+                  <Text style={styles.summaryLabel} numberOfLines={1}>
+                    Adesão
+                  </Text>
                 </Card>
               </View>
             )}
 
             {/* Gráfico 1: Evolução do Esforço Percebido (RPE) */}
-            <Card variant="elevated" padding="lg" style={styles.chartCard}>
+            <Card variant="elevated" padding="md" style={styles.chartCard}>
               <View style={styles.chartHeader}>
-                <View>
+                <View style={styles.chartTitleContainer}>
                   <Text style={styles.chartTitle}>Percepção de Esforço (RPE)</Text>
                   <Text style={styles.chartSubtitle}>
                     Média de cansaço informado na escala Borg CR-10
                   </Text>
                 </View>
 
-                {dashboard?.evolucaoRpe?.mediaRpe && (
-                  <Badge tone="warning">
+                {dashboard?.evolucaoRpe?.mediaRpe !== undefined && dashboard.evolucaoRpe.mediaRpe > 0 && (
+                  <Badge tone="warning" style={styles.headerBadge}>
                     Média {dashboard.evolucaoRpe.mediaRpe.toFixed(1)}/10
                   </Badge>
                 )}
@@ -171,7 +194,7 @@ export default function AlunoEvolucaoScreen() {
 
                 {dashboard.metricas.map((m) => {
                   const points = m.pontos.map((p) => ({
-                    label: p.data ? p.data.slice(5) : "",
+                    label: formatPointDate(p.data),
                     value: p.valorNumerico || parseFloat(p.valor) || 0,
                   }));
 
@@ -179,11 +202,11 @@ export default function AlunoEvolucaoScreen() {
                   const isRegression = m.tendencia?.direcao === "REGRESSAO";
 
                   return (
-                    <Card key={m.metricaId} variant="elevated" padding="lg" style={styles.metricCard}>
+                    <Card key={m.metricaId} variant="elevated" padding="md" style={styles.metricCard}>
                       <View style={styles.chartHeader}>
-                        <View style={{ flex: 1 }}>
+                        <View style={styles.chartTitleContainer}>
                           <Text style={styles.chartTitle}>{m.titulo}</Text>
-                          <Text style={styles.chartSubtitle}>
+                          <Text style={styles.chartSubtitle} numberOfLines={2}>
                             {m.tendencia?.resumo || "Evolução temporal das sessões"}
                           </Text>
                         </View>
@@ -191,6 +214,7 @@ export default function AlunoEvolucaoScreen() {
                         {m.tendencia && (
                           <Badge
                             tone={isImprovement ? "success" : isRegression ? "danger" : "neutral"}
+                            style={styles.headerBadge}
                             icon={
                               isImprovement ? (
                                 <TrendingUp size={12} color={colors.success.dark} />
@@ -234,21 +258,29 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xxl * 2,
+    paddingBottom: 120, // Folga adequada para não sobrepor o menu inferior flutuante
   },
   header: {
     marginBottom: spacing.base,
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
   },
   title: {
     fontFamily: fonts.bold,
     fontSize: typography.sizes.title1,
     color: colors.ink[900],
+    flex: 1,
   },
   subtitle: {
     fontFamily: fonts.regular,
-    fontSize: typography.sizes.body,
+    fontSize: typography.sizes.caption,
     color: colors.ink[500],
     marginTop: 2,
+    lineHeight: 18,
   },
   loadingBox: {
     paddingVertical: spacing.xxl * 2,
@@ -260,9 +292,8 @@ const styles = StyleSheet.create({
     color: colors.ink[500],
     marginTop: spacing.md,
   },
-  modalityTagRow: {
-    marginBottom: spacing.base,
-  },
+
+  /* Resumo Geral 3 Colunas */
   summaryGrid: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -270,8 +301,11 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.md,
+    paddingHorizontal: 4,
   },
   summaryIconCircle: {
     width: 28,
@@ -284,15 +318,19 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontFamily: fonts.extraBold,
-    fontSize: typography.sizes.cardTitle,
+    fontSize: 16,
     color: colors.ink[900],
+    textAlign: "center",
   },
   summaryLabel: {
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
     fontSize: typography.sizes.tiny,
     color: colors.ink[500],
     marginTop: 2,
+    textAlign: "center",
   },
+
+  /* Cards de Gráfico */
   chartCard: {
     marginBottom: spacing.base,
   },
@@ -300,7 +338,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  chartTitleContainer: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   chartTitle: {
     fontFamily: fonts.bold,
@@ -309,12 +351,19 @@ const styles = StyleSheet.create({
   },
   chartSubtitle: {
     fontFamily: fonts.regular,
-    fontSize: typography.sizes.caption,
+    fontSize: typography.sizes.tiny,
     color: colors.ink[500],
     marginTop: 2,
+    lineHeight: 16,
   },
+  headerBadge: {
+    flexShrink: 0,
+    alignSelf: "flex-start",
+  },
+
+  /* Seção de Métricas */
   metricsSection: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   metricsSectionTitle: {
     fontFamily: fonts.bold,
