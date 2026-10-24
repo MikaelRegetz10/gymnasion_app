@@ -13,17 +13,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   CheckCircle2,
-  Circle,
-  Timer,
   Calendar,
   Clock,
-  Sparkles,
   Info,
   Check,
   AlertCircle,
   Heart,
   Activity,
   Layers,
+  Timer,
+  Flame,
+  Gauge,
+  TrendingUp,
+  Dumbbell,
+  Award,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
@@ -52,9 +55,22 @@ const RPE_LEVELS = [
   { val: 10, label: "Esforço Máximo", desc: "Exaustão total, limite atingido", color: colors.danger.dark },
 ];
 
+function formatCompletedDate(dateIso?: string | null): string {
+  if (!dateIso) return "Data não informada";
+  try {
+    const [year, month, day] = dateIso.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    const weekday = date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+    const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    return `${capitalized}, ${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
+  } catch {
+    return dateIso;
+  }
+}
+
 export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  // Mantém a tela ligada durante o treino na academia
+  // Mantém a tela ligada durante a atividade na academia
   useKeepAwake();
 
   const [loading, setLoading] = useState(true);
@@ -121,7 +137,7 @@ export default function SessionDetailScreen() {
       errors["duracao"] = "Informe a duração real em minutos (mínimo 1 minuto).";
     }
 
-    // 2. Validação das Métricas do Aluno (conforme regras de negócio RN-015 / US-22)
+    // 2. Validação das Métricas do Aluno
     const resultados: RegistrarResultadoMetricaDTO[] = [];
     if (formData?.metricas) {
       for (const m of formData.metricas) {
@@ -158,7 +174,6 @@ export default function SessionDetailScreen() {
       }
     }
 
-    // Se houver erros client-side, interrompe a requisição e destaca os campos
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setSubmitError(
@@ -212,111 +227,309 @@ export default function SessionDetailScreen() {
 
   const { sessao, registroPermitido, metricas } = formData;
   const parsed = parseAtividades(sessao.atividades);
-  const isCompleted = sessao.status === "CONCLUIDA";
+  const isCompleted = sessao.status === "CONCLUIDA" || Boolean(sessao.concluidaAluno);
   const completedExercisesCount = Object.values(checkedExercises).filter(Boolean).length;
-  const activeRpeLevel = RPE_LEVELS.find((l) => l.val === selectedRpe) || RPE_LEVELS[6];
+  const rpeValue = sessao.desempenho?.nivelCansaco || selectedRpe;
+  const activeRpeLevel = RPE_LEVELS.find((l) => l.val === rpeValue) || RPE_LEVELS[6];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <Header
         title={parsed.sessionName || `Sessão ${sessao.semana}`}
-        subtitle={`Semana ${sessao.semana} · ${sessao.dataPlanejada}`}
+        subtitle={`Semana ${sessao.semana} · ${formatCompletedDate(sessao.dataReal || sessao.dataPlanejada)}`}
         showBack
       />
 
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Status Card */}
-        <Card variant="elevated" padding="md" style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View>
-              <Text style={styles.statusHeading}>{parsed.sessionName || "Treino Programado"}</Text>
-              <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Calendar size={14} color={colors.ink[400]} />
-                  <Text style={styles.metaText}>{sessao.dataPlanejada}</Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Clock size={14} color={colors.ink[400]} />
-                  <Text style={styles.metaText}>{sessao.duracao || 60} minutos</Text>
-                </View>
-              </View>
-            </View>
-            <Badge tone={isCompleted ? "success" : "info"}>
-              {isCompleted ? "Concluído" : "Em Aberto"}
-            </Badge>
-          </View>
-
-          {isCompleted && sessao.desempenho && (
-            <View style={styles.completedNotice}>
-              <Text style={styles.completedTitle}>Treino Realizado!</Text>
-              <Text style={styles.completedText}>
-                Registrado em {sessao.dataReal || sessao.dataPlanejada} com RPE {sessao.desempenho.nivelCansaco}/10.
-              </Text>
-            </View>
-          )}
-        </Card>
-
-        {/* Orientações do Treinador */}
-        {parsed.orientations ? (
-          <View style={styles.orientationsBox}>
-            <Info size={16} color={colors.primary[500]} style={styles.infoIcon} />
-            <Text style={styles.orientationsText}>{parsed.orientations}</Text>
-          </View>
-        ) : null}
-
-        {/* Checklist de Exercícios */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Exercícios Programados</Text>
-          {!isCompleted && parsed.activities.length > 0 && (
-            <Text style={styles.checklistProgress}>
-              {completedExercisesCount}/{parsed.activities.length} séries feitas
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.activitiesList}>
-          {parsed.activities.map((act, index) => {
-            const isChecked = Boolean(checkedExercises[act.id]) || isCompleted;
-
-            return (
-              <TouchableOpacity
-                key={act.id}
-                style={[styles.activityItem, isChecked && styles.activityItemChecked]}
-                onPress={() => !isCompleted && toggleExercise(act.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkCircle, isChecked && styles.checkCircleActive]}>
-                  {isChecked ? (
-                    <Check size={16} color={colors.surface} />
-                  ) : (
-                    <Text style={styles.exerciseIndex}>{index + 1}</Text>
-                  )}
-                </View>
-
-                <View style={styles.activityContent}>
-                  <Text style={[styles.activityTitle, isChecked && styles.activityTitleChecked]}>
-                    {act.title}
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* ============================================================== */}
+        {/* MODO 1: TREINO CONCLUÍDO (Sumário Hero Inspirado em Hevy / NTC) */}
+        {/* ============================================================== */}
+        {isCompleted ? (
+          <>
+            {/* Card Hero Celebrativo de Conclusão */}
+            <Card variant="elevated" padding="lg" style={styles.completedHeroCard}>
+              <View style={styles.completedHeroHeader}>
+                <Badge tone="success" icon={<CheckCircle2 size={14} color={colors.success.dark} />}>
+                  Treino Concluído
+                </Badge>
+                <View style={styles.completedHeroDateRow}>
+                  <Calendar size={14} color={colors.ink[500]} />
+                  <Text style={styles.completedHeroDateText}>
+                    {formatCompletedDate(sessao.dataReal || sessao.dataPlanejada)}
                   </Text>
-                  {act.description ? (
-                    <Text style={styles.activityDesc}>{act.description}</Text>
-                  ) : null}
                 </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Métricas Registradas (se concluído) */}
-        {isCompleted && sessao.desempenho?.metricas && sessao.desempenho.metricas.length > 0 && (
-          <Card variant="outlined" padding="md" style={styles.resultsCard}>
-            <Text style={styles.resultsTitle}>Métricas Registradas</Text>
-            {sessao.desempenho.metricas.map((m) => (
-              <View key={m.id} style={styles.resultRow}>
-                <Text style={styles.resultLabel}>{m.tituloMetrica}</Text>
-                <Text style={styles.resultValue}>{m.valor}</Text>
               </View>
-            ))}
-          </Card>
+
+              <Text style={styles.completedHeroTitle}>
+                {parsed.sessionName || `Sessão ${sessao.semana}`}
+              </Text>
+              <Text style={styles.completedHeroSubtitle}>
+                Semana {sessao.semana} · Execução registrada e validada no cronograma
+              </Text>
+
+              {/* 3 KPIs em Destaque do Treino Realizado */}
+              <View style={styles.completedKpisGrid}>
+                {/* Duração Real */}
+                <View style={styles.completedKpiCard}>
+                  <View style={[styles.kpiIconBox, { backgroundColor: colors.primary[50] }]}>
+                    <Clock size={18} color={colors.primary[500]} />
+                  </View>
+                  <Text style={styles.completedKpiValue}>
+                    {sessao.duracao ? `${sessao.duracao} min` : "45 min"}
+                  </Text>
+                  <Text style={styles.completedKpiLabel}>Tempo Real</Text>
+                </View>
+
+                {/* Nível de Esforço RPE */}
+                <View style={styles.completedKpiCard}>
+                  <View style={[styles.kpiIconBox, { backgroundColor: activeRpeLevel.color + "18" }]}>
+                    <Flame size={18} color={activeRpeLevel.color} />
+                  </View>
+                  <Text style={[styles.completedKpiValue, { color: activeRpeLevel.color }]}>
+                    {sessao.desempenho?.nivelCansaco ? `${sessao.desempenho.nivelCansaco}/10` : "—"}
+                  </Text>
+                  <Text style={styles.completedKpiLabel}>Esforço (RPE)</Text>
+                </View>
+
+                {/* Exercícios Feitos */}
+                <View style={styles.completedKpiCard}>
+                  <View style={[styles.kpiIconBox, { backgroundColor: colors.success.light }]}>
+                    <CheckCircle2 size={18} color={colors.success.base} />
+                  </View>
+                  <Text style={styles.completedKpiValue}>
+                    {parsed.activities.length}
+                  </Text>
+                  <Text style={styles.completedKpiLabel}>Exercício(s)</Text>
+                </View>
+              </View>
+            </Card>
+
+            {/* Card de Nível de Esforço Borg CR-10 com Medidor Visual */}
+            {sessao.desempenho?.nivelCansaco && (
+              <Card variant="elevated" padding="md" style={styles.rpeSummaryCard}>
+                <View style={styles.rpeSummaryHeader}>
+                  <View style={[styles.rpeBadgeBox, { backgroundColor: activeRpeLevel.color }]}>
+                    <Text style={styles.rpeBadgeBoxText}>{activeRpeLevel.val}</Text>
+                  </View>
+                  <View style={styles.rpeSummaryTextWrapper}>
+                    <View style={styles.rpeSummaryTitleRow}>
+                      <Text style={[styles.rpeSummaryTitle, { color: activeRpeLevel.color }]}>
+                        Nível {activeRpeLevel.val} · {activeRpeLevel.label}
+                      </Text>
+                      <Badge tone={activeRpeLevel.val >= 8 ? "danger" : activeRpeLevel.val >= 5 ? "warning" : "success"}>
+                        Borg CR-10
+                      </Badge>
+                    </View>
+                    <Text style={styles.rpeSummaryDesc}>
+                      {activeRpeLevel.desc}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Régua de Intensidade Visual de 1 a 10 Segmentos */}
+                <View style={styles.rpeSegmentsBar}>
+                  {RPE_LEVELS.map((item) => {
+                    const isFilled = (sessao.desempenho?.nivelCansaco || 0) >= item.val;
+                    return (
+                      <View
+                        key={item.val}
+                        style={[
+                          styles.rpeSegment,
+                          isFilled && { backgroundColor: item.color },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+              </Card>
+            )}
+
+            {/* Métricas Registradas da Sessão */}
+            {sessao.desempenho?.metricas && sessao.desempenho.metricas.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionHeading}>Métricas Registradas da Sessão</Text>
+                <View style={styles.metricsListGroup}>
+                  {sessao.desempenho.metricas.map((m) => {
+                    const def = formData.metricas?.find((x) => x.id === m.metricaId);
+                    const tipo = def?.tipo || m.tipoMetrica;
+
+                    let icon = <Activity size={18} color={colors.primary[500]} />;
+                    let iconBg: string = colors.primary[50];
+                    if (tipo === "FREQUENCIA_CARDIACA") {
+                      icon = <Heart size={18} color={colors.danger.base} />;
+                      iconBg = colors.danger.light;
+                    } else if (tipo === "TEMPO") {
+                      icon = <Timer size={18} color={colors.info.base} />;
+                      iconBg = colors.info.light;
+                    } else if (tipo === "NUMERICO") {
+                      icon = <Dumbbell size={18} color={colors.primary[500]} />;
+                      iconBg = colors.primary[50];
+                    }
+
+                    return (
+                      <Card key={m.id} variant="elevated" padding="md" style={styles.metricCardItem}>
+                        <View style={styles.metricItemLeft}>
+                          <View style={[styles.metricItemIconBox, { backgroundColor: iconBg }]}>
+                            {icon}
+                          </View>
+                          <View style={styles.metricItemInfo}>
+                            <Text style={styles.metricItemTitle}>{m.tituloMetrica}</Text>
+                            {def?.unidade ? (
+                              <Text style={styles.metricItemUnit}>Unidade: {def.unidade}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        <View style={styles.metricItemRight}>
+                          <Text style={styles.metricItemValue}>{m.valor}</Text>
+                          {def?.unidade ? (
+                            <Text style={styles.metricItemUnitBadge}>{def.unidade}</Text>
+                          ) : null}
+                        </View>
+                      </Card>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Exercícios Concluídos */}
+            <View style={styles.sectionBlock}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeading}>Exercícios Concluídos</Text>
+                <Badge tone="success">{parsed.activities.length} séries</Badge>
+              </View>
+
+              <View style={styles.activitiesList}>
+                {parsed.activities.map((act) => (
+                  <Card key={act.id} variant="elevated" padding="md" style={styles.completedExerciseCard}>
+                    <View style={styles.completedExerciseRow}>
+                      <View style={styles.exerciseCompletedCheck}>
+                        <Check size={16} color={colors.success.dark} />
+                      </View>
+                      <View style={styles.exerciseContentWrapper}>
+                        <View style={styles.exerciseTitleLine}>
+                          <Text style={styles.completedExerciseTitle}>{act.title}</Text>
+                          <Badge tone="success">Concluído</Badge>
+                        </View>
+                        {act.description ? (
+                          <Text style={styles.completedExerciseDesc}>{act.description}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </Card>
+                ))}
+              </View>
+            </View>
+
+            {/* Orientações do Treinador */}
+            {parsed.orientations ? (
+              <View style={styles.orientationsBox}>
+                <Info size={20} color={colors.primary[500]} style={styles.infoIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.orientationsHeading}>Orientações do Treinador</Text>
+                  <Text style={styles.orientationsText}>{parsed.orientations}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Ações Finais de Navegação */}
+            <View style={styles.completedActionsContainer}>
+              <Button
+                title="Voltar para Meus Treinos"
+                variant="primary"
+                size="lg"
+                icon={<Calendar size={18} color={colors.surface} />}
+                onPress={() => router.push("/(aluno)/treinos")}
+              />
+              <Button
+                title="Acompanhar Minha Evolução"
+                variant="secondary"
+                size="md"
+                icon={<TrendingUp size={16} color={colors.primary[600]} />}
+                onPress={() => router.push("/(aluno)/evolucao")}
+                style={{ marginTop: spacing.xs }}
+              />
+            </View>
+          </>
+        ) : (
+          /* ============================================================== */
+          /* MODO 2: TREINO AO VIVO / EXECUÇÃO                              */
+          /* ============================================================== */
+          <>
+            {/* Status Card do Treino em Aberto */}
+            <Card variant="elevated" padding="md" style={styles.statusCard}>
+              <View style={styles.statusRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.statusHeading}>{parsed.sessionName || "Treino Programado"}</Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <Calendar size={14} color={colors.ink[400]} />
+                      <Text style={styles.metaText}>{sessao.dataPlanejada}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Clock size={14} color={colors.ink[400]} />
+                      <Text style={styles.metaText}>{sessao.duracao || 60} minutos</Text>
+                    </View>
+                  </View>
+                </View>
+                <Badge tone="info">Em Aberto</Badge>
+              </View>
+            </Card>
+
+            {/* Orientações do Treinador */}
+            {parsed.orientations ? (
+              <View style={styles.orientationsBox}>
+                <Info size={18} color={colors.primary[500]} style={styles.infoIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.orientationsHeading}>Orientações do Treinador</Text>
+                  <Text style={styles.orientationsText}>{parsed.orientations}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Checklist de Exercícios Interativo */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeading}>Exercícios Programados</Text>
+              {parsed.activities.length > 0 && (
+                <Text style={styles.checklistProgress}>
+                  {completedExercisesCount}/{parsed.activities.length} séries feitas
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.activitiesList}>
+              {parsed.activities.map((act, index) => {
+                const isChecked = Boolean(checkedExercises[act.id]);
+
+                return (
+                  <TouchableOpacity
+                    key={act.id}
+                    style={[styles.activityItem, isChecked && styles.activityItemChecked]}
+                    onPress={() => toggleExercise(act.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkCircle, isChecked && styles.checkCircleActive]}>
+                      {isChecked ? (
+                        <Check size={16} color={colors.surface} />
+                      ) : (
+                        <Text style={styles.exerciseIndex}>{index + 1}</Text>
+                      )}
+                    </View>
+
+                    <View style={styles.activityContent}>
+                      <Text style={[styles.activityTitle, isChecked && styles.activityTitleChecked]}>
+                        {act.title}
+                      </Text>
+                      {act.description ? (
+                        <Text style={styles.activityDesc}>{act.description}</Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
         )}
       </ScrollView>
 
@@ -590,14 +803,274 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl * 3,
+    paddingTop: spacing.md,
+    paddingBottom: 120,
   },
   centerContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* ============================================================== */
+  /* ESTILOS DE TREINO CONCLUÍDO (Sumário Hero Inspirado nos Top Apps) */
+  /* ============================================================== */
+  completedHeroCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.base,
+    ...shadows.card,
+  },
+  completedHeroHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  completedHeroDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  completedHeroDateText: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[600],
+  },
+  completedHeroTitle: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.title1,
+    color: colors.ink[900],
+    marginBottom: 4,
+  },
+  completedHeroSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.body,
+    color: colors.ink[600],
+    marginBottom: spacing.base,
+    lineHeight: 22,
+  },
+  completedKpisGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  completedKpiCard: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: radii.control,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  kpiIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  completedKpiValue: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.title2,
+    color: colors.ink[900],
+    textAlign: "center",
+  },
+  completedKpiLabel: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[500],
+    marginTop: 2,
+    textAlign: "center",
+  },
+
+  /* Card RPE Borg CR-10 com Barra de 10 Segmentos */
+  rpeSummaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.base,
+    ...shadows.sm,
+  },
+  rpeSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  rpeBadgeBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.control,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  rpeBadgeBoxText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 20,
+    color: colors.surface,
+  },
+  rpeSummaryTextWrapper: {
+    flex: 1,
+  },
+  rpeSummaryTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+  rpeSummaryTitle: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.cardTitle,
+  },
+  rpeSummaryDesc: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[600],
+    lineHeight: 18,
+  },
+  rpeSegmentsBar: {
+    flexDirection: "row",
+    gap: 4,
+    height: 8,
+  },
+  rpeSegment: {
+    flex: 1,
+    height: "100%",
+    backgroundColor: colors.ink[200],
+    borderRadius: radii.pill,
+  },
+
+  /* Seções e Títulos */
+  sectionBlock: {
+    marginBottom: spacing.base,
+  },
+  sectionHeading: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.cardTitle,
+    color: colors.ink[900],
+    marginBottom: spacing.sm,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+
+  /* Métricas Registradas da Sessão */
+  metricsListGroup: {
+    gap: spacing.sm,
+  },
+  metricCardItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+  },
+  metricItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  metricItemIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.control,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  metricItemInfo: {
+    flex: 1,
+  },
+  metricItemTitle: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.body,
+    color: colors.ink[900],
+  },
+  metricItemUnit: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[500],
+    marginTop: 2,
+  },
+  metricItemRight: {
+    alignItems: "flex-end",
+  },
+  metricItemValue: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.cardTitle,
+    color: colors.ink[900],
+  },
+  metricItemUnitBadge: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[400],
+    marginTop: 2,
+  },
+
+  /* Exercícios Concluídos */
+  completedExerciseCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.xs,
+  },
+  completedExerciseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  exerciseCompletedCheck: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.success.light,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  exerciseContentWrapper: {
+    flex: 1,
+  },
+  exerciseTitleLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  completedExerciseTitle: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.body,
+    color: colors.ink[900],
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  completedExerciseDesc: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[600],
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  completedActionsContainer: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+
+  /* ============================================================== */
+  /* ESTILOS DE TREINO AO VIVO / EXECUÇÃO                           */
+  /* ============================================================== */
   statusCard: {
     marginBottom: spacing.base,
   },
@@ -626,23 +1099,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     color: colors.ink[500],
   },
-  completedNotice: {
-    marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  completedTitle: {
-    fontFamily: fonts.bold,
-    fontSize: typography.sizes.caption,
-    color: colors.success.dark,
-  },
-  completedText: {
-    fontFamily: fonts.regular,
-    fontSize: typography.sizes.caption,
-    color: colors.ink[700],
-    marginTop: 2,
-  },
   orientationsBox: {
     flexDirection: "row",
     backgroundColor: colors.primary[50],
@@ -655,26 +1111,20 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
     marginTop: 2,
   },
-  orientationsText: {
-    flex: 1,
-    fontFamily: fonts.medium,
+  orientationsHeading: {
+    fontFamily: fonts.bold,
     fontSize: typography.sizes.caption,
     color: colors.primary[600],
-    lineHeight: 18,
+    marginBottom: 2,
   },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontFamily: fonts.bold,
-    fontSize: typography.sizes.cardTitle,
-    color: colors.ink[900],
+  orientationsText: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[700],
+    lineHeight: 20,
   },
   checklistProgress: {
-    fontFamily: fonts.medium,
+    fontFamily: fonts.bold,
     fontSize: typography.sizes.caption,
     color: colors.primary[500],
   },
@@ -693,13 +1143,13 @@ const styles = StyleSheet.create({
   activityItemChecked: {
     backgroundColor: colors.ink[100],
     borderColor: colors.border,
-    opacity: 0.8,
+    opacity: 0.85,
   },
   checkCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.ink[400],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.ink[300],
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing.md,
@@ -709,14 +1159,14 @@ const styles = StyleSheet.create({
   },
   exerciseIndex: {
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.surface,
   },
   activityContent: {
     flex: 1,
   },
   activityTitle: {
-    fontFamily: fonts.semiBold,
+    fontFamily: fonts.bold,
     fontSize: typography.sizes.body,
     color: colors.ink[900],
   },
@@ -727,34 +1177,9 @@ const styles = StyleSheet.create({
   activityDesc: {
     fontFamily: fonts.regular,
     fontSize: typography.sizes.caption,
-    color: colors.ink[500],
-    marginTop: 2,
-  },
-  resultsCard: {
-    marginTop: spacing.lg,
-  },
-  resultsTitle: {
-    fontFamily: fonts.bold,
-    fontSize: typography.sizes.cardTitle,
-    color: colors.ink[900],
-    marginBottom: spacing.sm,
-  },
-  resultRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  resultLabel: {
-    fontFamily: fonts.regular,
-    fontSize: typography.sizes.caption,
-    color: colors.ink[700],
-  },
-  resultValue: {
-    fontFamily: fonts.bold,
-    fontSize: typography.sizes.caption,
-    color: colors.ink[900],
+    color: colors.ink[600],
+    marginTop: 3,
+    lineHeight: 18,
   },
   stickyFooter: {
     position: "absolute",
@@ -777,6 +1202,10 @@ const styles = StyleSheet.create({
   finishBtn: {
     flex: 1.5,
   },
+
+  /* ============================================================== */
+  /* MODAL DE CHECKOUT / CONCLUSÃO                                  */
+  /* ============================================================== */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
@@ -792,7 +1221,7 @@ const styles = StyleSheet.create({
   },
   checkoutTitle: {
     fontFamily: fonts.bold,
-    fontSize: typography.sizes.title2,
+    fontSize: typography.sizes.title1,
     color: colors.ink[900],
   },
   checkoutSubtitle: {
@@ -801,9 +1230,8 @@ const styles = StyleSheet.create({
     color: colors.ink[500],
     marginTop: 2,
     marginBottom: spacing.base,
+    lineHeight: 20,
   },
-
-  /* Banner de Erros */
   checkoutError: {
     backgroundColor: colors.danger.light,
     borderWidth: 1,
@@ -842,12 +1270,9 @@ const styles = StyleSheet.create({
     color: colors.danger.dark,
     lineHeight: 16,
   },
-
   checkoutScroll: {
     marginBottom: spacing.base,
   },
-
-  /* Seletor Inline RPE */
   rpeSection: {
     marginBottom: spacing.base,
   },
@@ -900,16 +1325,16 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   rpeFeedbackBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing.md,
   },
   rpeFeedbackBadgeText: {
     fontFamily: fonts.bold,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.surface,
   },
   rpeFeedbackContent: {
@@ -924,9 +1349,8 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.tiny,
     color: colors.ink[600],
     marginTop: 2,
+    lineHeight: 16,
   },
-
-  /* Métricas */
   metricsFormBlock: {
     marginTop: spacing.xs,
   },

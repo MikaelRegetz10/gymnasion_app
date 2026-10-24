@@ -77,12 +77,12 @@ export const fonts = {
 export const typography = {
   sizes: {
     display: 34,
-    title1: 26,
-    title2: 20,
-    cardTitle: 16,
-    body: 14,
-    caption: 12,
-    tiny: 10,
+    title1: 28,
+    title2: 22,
+    cardTitle: 18,
+    body: 16,
+    caption: 14,
+    tiny: 12,
   },
   lineHeights: {
     heading: 1.25,
