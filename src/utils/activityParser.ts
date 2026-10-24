@@ -1,0 +1,118 @@
+export interface ActivityItem {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export interface ParsedSessionActivities {
+  sessionName: string;
+  activities: ActivityItem[];
+  orientations: string;
+}
+
+/**
+ * Converte o texto bruto de `atividades` da sessão em estrutura organizada
+ * com nome do treino, lista de exercícios e orientações gerais.
+ */
+export function parseAtividades(raw?: string | null): ParsedSessionActivities {
+  if (!raw || !raw.trim()) {
+    return { sessionName: "", activities: [], orientations: "" };
+  }
+
+  let normalized = raw;
+  let extractedSessionName = "";
+  const sessaoTagMatch = normalized.match(/\[SESSAO:\s*([^\]]*)\]/i);
+  if (sessaoTagMatch) {
+    extractedSessionName = sessaoTagMatch[1]?.trim() || "";
+    normalized = normalized.replace(sessaoTagMatch[0], "\n");
+  }
+  normalized = normalized
+    .replace(/\[ATIVIDADES\]/gi, "\n")
+    .replace(/\[ORIENTACOES\]/gi, "\nOrientações: ");
+
+  const lines = normalized
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return { sessionName: extractedSessionName, activities: [], orientations: "" };
+  }
+
+  let sessionName = extractedSessionName;
+  let orientations = "";
+  const activityLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Bloco de orientações
+    const orientationsMatch = line.match(/^orienta[cç][oõ]es?:\s*(.*)$/i);
+    if (orientationsMatch) {
+      orientations = orientationsMatch[1]?.trim() || "";
+      for (let j = i + 1; j < lines.length; j++) {
+        orientations += (orientations ? " " : "") + lines[j].trim();
+      }
+      break;
+    }
+
+    // Nome explícito da sessão
+    const sessionNameMatch = line.match(/^(?:nome da sess[aã]o|sess[aã]o|t[ií]tulo):\s*(.*)$/i);
+    if (sessionNameMatch) {
+      if (!sessionName) {
+        sessionName = sessionNameMatch[1]?.trim() || "";
+      }
+      continue;
+    }
+
+    // Primeira linha como título da sessão se for um identificador curto
+    if (
+      !sessionName &&
+      i === 0 &&
+      lines.length > 1 &&
+      !line.includes(":") &&
+      !line.includes("·") &&
+      !line.includes("—") &&
+      !/^\d+[.)]\s/.test(line)
+    ) {
+      sessionName = line;
+      continue;
+    }
+
+    activityLines.push(line.replace(/^\d+[.)]\s*/, "").trim());
+  }
+
+  const activities: ActivityItem[] = activityLines.filter(Boolean).map((line, idx) => {
+    let title = "";
+    let description = "";
+
+    if (line.includes("·")) {
+      const parts = line.split("·");
+      title = parts[0]?.trim() || `Exercício ${idx + 1}`;
+      description = parts.slice(1).join("·").trim();
+    } else if (line.includes("—")) {
+      const parts = line.split("—");
+      title = parts[0]?.trim() || `Exercício ${idx + 1}`;
+      description = parts.slice(1).join("—").trim();
+    } else if (line.includes(":")) {
+      const colonIdx = line.indexOf(":");
+      title = line.substring(0, colonIdx).trim() || `Exercício ${idx + 1}`;
+      description = line.substring(colonIdx + 1).trim();
+    } else {
+      title = line;
+      description = "";
+    }
+
+    return {
+      id: `act-${idx + 1}`,
+      title,
+      description,
+    };
+  });
+
+  return {
+    sessionName: sessionName || "Treino Programado",
+    activities,
+    orientations,
+  };
+}
