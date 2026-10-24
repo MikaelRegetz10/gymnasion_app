@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: 120, // Folga adequada para não sobrepor o menu inferior flutuante
+    paddingBottom: spacing.xl,
   },
   header: {
     marginBottom: spacing.base,

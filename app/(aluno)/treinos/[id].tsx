@@ -240,7 +240,15 @@ export default function SessionDetailScreen() {
         showBack
       />
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingBottom: !isCompleted && registroPermitido ? 96 : spacing.xl,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* ============================================================== */}
         {/* MODO 1: TREINO CONCLUÍDO (Sumário Hero Inspirado em Hevy / NTC) */}
         {/* ============================================================== */}
@@ -448,7 +456,6 @@ export default function SessionDetailScreen() {
                 size="md"
                 icon={<TrendingUp size={16} color={colors.primary[600]} />}
                 onPress={() => router.push("/(aluno)/evolucao")}
-                style={{ marginTop: spacing.xs }}
               />
             </View>
           </>
@@ -804,7 +811,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: 120,
+    paddingBottom: spacing.xl,
   },
   centerContainer: {
     flex: 1,
@@ -1064,8 +1071,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   completedActionsContainer: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
+    marginTop: spacing.base,
+    gap: spacing.sm,
   },
 
   /* ============================================================== */

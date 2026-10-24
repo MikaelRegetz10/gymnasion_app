@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xxl * 2,
+    paddingBottom: spacing.xl,
     gap: spacing.lg,
   },
   topbar: {

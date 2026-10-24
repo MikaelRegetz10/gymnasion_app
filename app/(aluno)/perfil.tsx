@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xxl * 2,
+    paddingBottom: spacing.xl,
   },
   title: {
     fontFamily: fonts.bold,
