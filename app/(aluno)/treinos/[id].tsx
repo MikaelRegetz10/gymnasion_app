@@ -27,20 +27,40 @@ import {
   TrendingUp,
   Dumbbell,
   Award,
+  ChevronDown,
 } from "lucide-react-native";
+import Svg, { Path } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 
 import { alunoService } from "@/src/services/alunoService";
+import { stravaService } from "@/src/services/stravaService";
 import type {
   FormularioExecucaoResponseDTO,
   RegistrarResultadoMetricaDTO,
 } from "@/src/types/student";
+import {
+  type StravaStatusResponse,
+  type StravaAtividade,
+  mapStravaActivityToMetrics,
+  formatStravaDate,
+} from "@/src/types/strava";
 import { parseAtividades } from "@/src/utils/activityParser";
 import { colors, fonts, radii, spacing, typography, shadows } from "@/src/theme/tokens";
 import { Button, Card, Badge, Header, FormField } from "@/src/components/ui";
 import RestTimerModal from "@/src/components/workout/RestTimerModal";
 import { handleApiError } from "@/src/utils/handleApiError";
+
+function StravaIcon({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7.008 13.828h4.172"
+        fill="#fc5200"
+      />
+    </Svg>
+  );
+}
 
 const RPE_LEVELS = [
   { val: 1, label: "Muito leve", desc: "Esforço quase imperceptível", color: colors.success.base },
@@ -88,6 +108,88 @@ export default function SessionDetailScreen() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Estado de Integração Strava (US-14 / US-22)
+  const [stravaStatus, setStravaStatus] = useState<StravaStatusResponse | null>(null);
+  const [stravaActivities, setStravaActivities] = useState<StravaAtividade[]>([]);
+  const [loadingStrava, setLoadingStrava] = useState(false);
+  const [selectedStravaId, setSelectedStravaId] = useState<string | null>(null);
+  const [stravaFilledMap, setStravaFilledMap] = useState<Record<string, boolean>>({});
+  const [connectingStrava, setConnectingStrava] = useState(false);
+  const [showStravaDropdown, setShowStravaDropdown] = useState(false);
+  const [executionDate, setExecutionDate] = useState<string>(new Date().toISOString().split("T")[0]);
+
+  async function loadStrava(currentMetrics = formData?.metricas) {
+    setLoadingStrava(true);
+    try {
+      const status = await stravaService.obterStatus();
+      setStravaStatus(status);
+      if (status.conectado && !status.expirado) {
+        const acts = await stravaService.listarAtividades(10);
+        setStravaActivities(acts);
+        if (acts.length > 0 && !selectedStravaId) {
+          applyStravaActivity(acts[0], currentMetrics);
+        }
+      }
+    } catch {
+      setStravaStatus({ conectado: false, expirado: false, mock: false });
+    } finally {
+      setLoadingStrava(false);
+    }
+  }
+
+  function applyStravaActivity(act: StravaAtividade, metricsList = formData?.metricas) {
+    setSelectedStravaId(act.id);
+    if (act.duracaoMinutos) {
+      setRealDuration(String(act.duracaoMinutos));
+    }
+    if (act.data) {
+      setExecutionDate(act.data);
+    }
+    if (metricsList && metricsList.length > 0) {
+      const mapped = mapStravaActivityToMetrics(act, metricsList);
+      setMetricValues((prev) => ({ ...prev, ...mapped.metricValues }));
+      setStravaFilledMap(mapped.stravaFilled);
+    }
+  }
+
+  function clearStravaSelection() {
+    setSelectedStravaId(null);
+    setStravaFilledMap({});
+  }
+
+  async function handleConnectStravaFromModal() {
+    setConnectingStrava(true);
+    setSubmitError(null);
+    try {
+      const status = await stravaService.iniciarConexao();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStravaStatus(status);
+      if (status.conectado && !status.expirado) {
+        const acts = await stravaService.listarAtividades(10);
+        setStravaActivities(acts);
+        if (acts.length > 0) {
+          applyStravaActivity(acts[0]);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes("cancelada")) {
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const parsed = handleApiError(err, "Não foi possível conectar ao Strava.");
+      setSubmitError(parsed.message);
+    } finally {
+      setConnectingStrava(false);
+    }
+  }
+
+  function openFinishModal() {
+    setSubmitError(null);
+    setFieldErrors({});
+    setFinishModalVisible(true);
+    loadStrava();
+  }
 
   async function loadSession() {
     if (!id) return;
@@ -188,7 +290,7 @@ export default function SessionDetailScreen() {
 
     try {
       await alunoService.registrarExecucao(id, {
-        dataReal: new Date().toISOString().split("T")[0],
+        dataReal: executionDate || new Date().toISOString().split("T")[0],
         duracao: parseInt(realDuration, 10) || 50,
         nivelCansaco: selectedRpe || undefined,
         resultados: resultados.length > 0 ? resultados : undefined,
@@ -231,6 +333,7 @@ export default function SessionDetailScreen() {
   const completedExercisesCount = Object.values(checkedExercises).filter(Boolean).length;
   const rpeValue = sessao.desempenho?.nivelCansaco || selectedRpe;
   const activeRpeLevel = RPE_LEVELS.find((l) => l.val === rpeValue) || RPE_LEVELS[6];
+  const selectedStravaActivity = stravaActivities.find((a) => a.id === selectedStravaId);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -314,20 +417,20 @@ export default function SessionDetailScreen() {
 
             {/* Card de Nível de Esforço Borg CR-10 com Medidor Visual */}
             {sessao.desempenho?.nivelCansaco && (
-              <Card variant="elevated" padding="md" style={styles.rpeSummaryCard}>
+              <Card variant="elevated" padding="lg" style={styles.rpeSummaryCard}>
                 <View style={styles.rpeSummaryHeader}>
                   <View style={[styles.rpeBadgeBox, { backgroundColor: activeRpeLevel.color }]}>
                     <Text style={styles.rpeBadgeBoxText}>{activeRpeLevel.val}</Text>
                   </View>
                   <View style={styles.rpeSummaryTextWrapper}>
-                    <View style={styles.rpeSummaryTitleRow}>
-                      <Text style={[styles.rpeSummaryTitle, { color: activeRpeLevel.color }]}>
-                        Nível {activeRpeLevel.val} · {activeRpeLevel.label}
-                      </Text>
+                    <View style={styles.rpeCategoryRow}>
                       <Badge tone={activeRpeLevel.val >= 8 ? "danger" : activeRpeLevel.val >= 5 ? "warning" : "success"}>
                         Borg CR-10
                       </Badge>
                     </View>
+                    <Text style={[styles.rpeSummaryTitle, { color: activeRpeLevel.color }]}>
+                      Nível {activeRpeLevel.val} · {activeRpeLevel.label}
+                    </Text>
                     <Text style={styles.rpeSummaryDesc}>
                       {activeRpeLevel.desc}
                     </Text>
@@ -558,11 +661,7 @@ export default function SessionDetailScreen() {
             variant="primary"
             size="md"
             icon={<CheckCircle2 size={18} color={colors.surface} />}
-            onPress={() => {
-              setSubmitError(null);
-              setFieldErrors({});
-              setFinishModalVisible(true);
-            }}
+            onPress={openFinishModal}
             style={styles.finishBtn}
             fullWidth={false}
           />
@@ -605,6 +704,154 @@ export default function SessionDetailScreen() {
             )}
 
             <ScrollView style={styles.checkoutScroll} showsVerticalScrollIndicator={false}>
+              {/* Integração com Strava no Checkout (US-14 / US-22) */}
+              {stravaStatus?.conectado && !stravaStatus?.expirado ? (
+                <View style={styles.stravaSyncCard}>
+                  <View style={styles.stravaSyncHeader}>
+                    <View style={styles.stravaSyncHeaderLeft}>
+                      <StravaIcon size={18} />
+                      <Text style={styles.stravaSyncTitle}>
+                        Sincronizar com atividade do Strava
+                      </Text>
+                    </View>
+                    {selectedStravaId ? (
+                      <Badge tone="primary">Atividade vinculada</Badge>
+                    ) : null}
+                  </View>
+
+                  {loadingStrava ? (
+                    <View style={styles.stravaLoadingRow}>
+                      <ActivityIndicator size="small" color="#fc5200" />
+                      <Text style={styles.stravaLoadingText}>
+                        Carregando atividades recentes do Strava...
+                      </Text>
+                    </View>
+                  ) : stravaActivities.length > 0 ? (
+                    <View style={styles.stravaPickerWrapper}>
+                      <Text style={styles.stravaPickerLabel}>
+                        Escolha a atividade para preencher os dados automaticamente:
+                      </Text>
+
+                      {/* Botão Seletor Principal */}
+                      <TouchableOpacity
+                        style={styles.stravaPickerButton}
+                        onPress={() => setShowStravaDropdown((prev) => !prev)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flex: 1 }}>
+                          {selectedStravaActivity ? (
+                            <>
+                              <Text style={styles.stravaSelectedTitle} numberOfLines={1}>
+                                {selectedStravaActivity.esporte || selectedStravaActivity.tipo}: {selectedStravaActivity.nome}
+                              </Text>
+                              <Text style={styles.stravaSelectedSubtitle}>
+                                {formatStravaDate(selectedStravaActivity.data)} · {selectedStravaActivity.distanciaFormatada || (selectedStravaActivity.distanciaKm ? `${selectedStravaActivity.distanciaKm} km` : "")} {selectedStravaActivity.tempoFormatado ? `· ${selectedStravaActivity.tempoFormatado}` : ""}
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={styles.stravaPlaceholderText}>
+                              Não importar do Strava (Preencher manualmente)
+                            </Text>
+                          )}
+                        </View>
+                        <ChevronDown
+                          size={18}
+                          color={colors.ink[500]}
+                          style={{ transform: [{ rotate: showStravaDropdown ? "180deg" : "0deg" }] }}
+                        />
+                      </TouchableOpacity>
+
+                      {/* Dropdown com opções de atividades recentes */}
+                      {showStravaDropdown && (
+                        <View style={styles.stravaDropdownList}>
+                          {stravaActivities.map((act) => {
+                            const isSelected = selectedStravaId === act.id;
+                            return (
+                              <TouchableOpacity
+                                key={act.id}
+                                style={[
+                                  styles.stravaDropdownItem,
+                                  isSelected && styles.stravaDropdownItemSelected,
+                                ]}
+                                onPress={() => {
+                                  applyStravaActivity(act);
+                                  setShowStravaDropdown(false);
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text
+                                    style={[
+                                      styles.stravaItemTitle,
+                                      isSelected && { color: colors.primary[600], fontFamily: fonts.bold },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {act.esporte || act.tipo}: {act.nome}
+                                  </Text>
+                                  <Text style={styles.stravaItemSubtitle}>
+                                    {formatStravaDate(act.data)} · {act.distanciaFormatada || (act.distanciaKm ? `${act.distanciaKm} km` : "")} {act.tempoFormatado ? `· ${act.tempoFormatado}` : ""}
+                                  </Text>
+                                </View>
+                                {isSelected && (
+                                  <Check size={16} color={colors.primary[600]} style={{ marginLeft: 8 }} />
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+
+                          {/* Opção Manual */}
+                          <TouchableOpacity
+                            style={[
+                              styles.stravaDropdownItem,
+                              !selectedStravaId && styles.stravaDropdownItemSelected,
+                              { borderTopWidth: 1, borderTopColor: colors.border },
+                            ]}
+                            onPress={() => {
+                              clearStravaSelection();
+                              setShowStravaDropdown(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.stravaItemManualText}>
+                              Não importar do Strava (Preencher manualmente)
+                            </Text>
+                            {!selectedStravaId && (
+                              <Check size={16} color={colors.ink[700]} style={{ marginLeft: 8 }} />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={styles.stravaEmptyText}>
+                      Nenhuma atividade recente encontrada no Strava.
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.stravaBannerDashed}>
+                  <View style={styles.stravaBannerLeft}>
+                    <StravaIcon size={18} />
+                    <Text style={styles.stravaBannerText}>
+                      Conecte o <Text style={{ fontFamily: fonts.bold }}>Strava</Text> para preencher métricas deste treino automaticamente.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleConnectStravaFromModal}
+                    disabled={connectingStrava}
+                    style={styles.stravaBannerLink}
+                    activeOpacity={0.7}
+                  >
+                    {connectingStrava ? (
+                      <ActivityIndicator size="small" color="#fc5200" />
+                    ) : (
+                      <Text style={styles.stravaBannerLinkText}>Conectar Strava →</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Campo Duração Real */}
               <FormField
                 label="Duração Real (minutos) *"
@@ -754,12 +1001,18 @@ export default function SessionDetailScreen() {
                         keyboardType = "default";
                       }
 
+                      const isStravaImported = Boolean(stravaFilledMap[m.id]);
+
                       return (
                         <FormField
                           key={m.id}
-                          label={`${m.titulo}${m.obrigatoria ? " *" : ""}${m.unidade ? ` (${m.unidade})` : ""}`}
+                          label={`${m.titulo}${m.obrigatoria ? " *" : ""}${m.unidade ? ` (${m.unidade})` : ""}${isStravaImported ? " · Strava" : ""}`}
                           placeholder={placeholderText}
-                          hint={hintText}
+                          hint={
+                            isStravaImported
+                              ? "Preenchido automaticamente pelo Strava · você pode editar"
+                              : hintText
+                          }
                           error={errorMsg}
                           keyboardType={keyboardType}
                           value={metricValues[m.id] || ""}
@@ -908,34 +1161,34 @@ const styles = StyleSheet.create({
   },
   rpeSummaryHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: spacing.md,
   },
   rpeBadgeBox: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: radii.control,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing.md,
+    marginTop: 2,
   },
   rpeBadgeBoxText: {
     fontFamily: fonts.extraBold,
-    fontSize: 20,
+    fontSize: 22,
     color: colors.surface,
   },
   rpeSummaryTextWrapper: {
     flex: 1,
   },
-  rpeSummaryTitleRow: {
+  rpeCategoryRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   rpeSummaryTitle: {
     fontFamily: fonts.bold,
     fontSize: typography.sizes.cardTitle,
+    marginBottom: 2,
   },
   rpeSummaryDesc: {
     fontFamily: fonts.regular,
@@ -1369,5 +1622,162 @@ const styles = StyleSheet.create({
   },
   checkoutActions: {
     gap: spacing.xs,
+  },
+
+  /* ============================================================== */
+  /* ESTILOS DE INTEGRAÇÃO STRAVA NO CHECKOUT                       */
+  /* ============================================================== */
+  stravaBannerDashed: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderStyle: "dashed",
+    borderRadius: radii.control,
+    padding: spacing.md,
+    marginBottom: spacing.base,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  stravaBannerLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  stravaBannerText: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[700],
+    lineHeight: 18,
+  },
+  stravaBannerLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  stravaBannerLinkText: {
+    fontFamily: fonts.semiBold,
+    fontSize: typography.sizes.caption,
+    color: "#fc5200",
+    textDecorationLine: "underline",
+  },
+  stravaSyncCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: radii.control,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.base,
+  },
+  stravaSyncHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  stravaSyncHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  stravaSyncTitle: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[900],
+  },
+  stravaLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  stravaLoadingText: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[600],
+  },
+  stravaPickerWrapper: {
+    marginTop: 2,
+  },
+  stravaPickerLabel: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[500],
+    marginBottom: 6,
+  },
+  stravaPickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.control,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    gap: spacing.sm,
+  },
+  stravaSelectedTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[900],
+  },
+  stravaSelectedSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[500],
+    marginTop: 2,
+  },
+  stravaPlaceholderText: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[500],
+  },
+  stravaDropdownList: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.control,
+    marginTop: 6,
+    overflow: "hidden",
+    ...shadows.sm,
+  },
+  stravaDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.ink[100],
+  },
+  stravaDropdownItemSelected: {
+    backgroundColor: "#fff4ef",
+  },
+  stravaItemTitle: {
+    fontFamily: fonts.semiBold,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[900],
+  },
+  stravaItemSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.tiny,
+    color: colors.ink[500],
+    marginTop: 2,
+  },
+  stravaItemManualText: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[700],
+  },
+  stravaEmptyText: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[500],
+    fontStyle: "italic",
+    paddingVertical: 4,
   },
 });

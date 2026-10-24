@@ -76,6 +76,8 @@ export interface PlanejamentoRotinaResponseDTO {
   semanas: SemanaPlanejamentoDTO[];
 }
 
+import type { CampoStrava } from "./strava";
+
 export interface MetricaResumoDTO {
   id: string;
   titulo: string;
@@ -84,6 +86,7 @@ export interface MetricaResumoDTO {
   quemPreenche: ResponsavelPreenchimento;
   unidade?: string;
   descricao?: string;
+  campoStrava?: CampoStrava | null;
 }
 
 export interface RotinaTreinoResponseDTO {

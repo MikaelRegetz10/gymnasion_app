@@ -6,6 +6,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -16,12 +18,16 @@ import {
   Phone,
   CheckCircle2,
   AlertCircle,
+  Activity,
+  Zap,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
 import { useAuth } from "@/src/contexts/AuthContext";
 import { authService } from "@/src/services/authService";
+import { stravaService } from "@/src/services/stravaService";
 import type { UsuarioResponseDTO } from "@/src/types/auth";
+import type { StravaStatusResponse } from "@/src/types/strava";
 import { colors, fonts, typography, radii, spacing } from "@/src/theme/tokens";
 import { handleApiError } from "@/src/utils/handleApiError";
 import { Button, FormField, Card, Avatar, Badge } from "@/src/components/ui";
@@ -29,6 +35,14 @@ import { Button, FormField, Card, Avatar, Badge } from "@/src/components/ui";
 export default function AlunoPerfilScreen() {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<UsuarioResponseDTO | null>(null);
+
+  // Integração com o Strava (US-14)
+  const [stravaStatus, setStravaStatus] = useState<StravaStatusResponse | null>(null);
+  const [loadingStrava, setLoadingStrava] = useState(true);
+  const [connectingStrava, setConnectingStrava] = useState(false);
+  const [disconnectingStrava, setDisconnectingStrava] = useState(false);
+  const [stravaError, setStravaError] = useState<string | null>(null);
+  const [stravaSuccess, setStravaSuccess] = useState<string | null>(null);
 
   // Formulário de Alteração de Senha
   const [senhaAtual, setSenhaAtual] = useState("");
@@ -39,16 +53,78 @@ export default function AlunoPerfilScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadProfile() {
+    async function loadData() {
       try {
-        const data = await authService.getMe();
-        setProfile(data);
+        const [userData, stravaData] = await Promise.allSettled([
+          authService.getMe(),
+          stravaService.obterStatus(),
+        ]);
+        if (userData.status === "fulfilled") setProfile(userData.value);
+        if (stravaData.status === "fulfilled") setStravaStatus(stravaData.value);
       } catch {
-        // Usa dados da sessão se a requisição falhar offline
+        // Usa dados da sessão se offline
+      } finally {
+        setLoadingStrava(false);
       }
     }
-    loadProfile();
+    loadData();
   }, []);
+
+  async function handleConnectStrava() {
+    setConnectingStrava(true);
+    setStravaError(null);
+    setStravaSuccess(null);
+    try {
+      const status = await stravaService.iniciarConexao();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStravaStatus(status);
+      setStravaSuccess(
+        status.nomeAtleta
+          ? `Strava conectado com sucesso como ${status.nomeAtleta}!`
+          : "Conta Strava conectada com sucesso!"
+      );
+    } catch (err: any) {
+      if (err.message && err.message.includes("cancelada")) {
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const parsed = handleApiError(err, "Não foi possível conectar ao Strava.");
+      setStravaError(parsed.message);
+    } finally {
+      setConnectingStrava(false);
+    }
+  }
+
+  function handleDisconnectStrava() {
+    Alert.alert(
+      "Desconectar Strava",
+      "Deseja realmente desconectar sua conta do Strava? As métricas já registradas permanecerão salvas no seu histórico.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Desconectar",
+          style: "destructive",
+          onPress: async () => {
+            setDisconnectingStrava(true);
+            setStravaError(null);
+            setStravaSuccess(null);
+            try {
+              await stravaService.desconectar();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setStravaStatus({ conectado: false, expirado: false, mock: false });
+              setStravaSuccess("Conta Strava desconectada com sucesso.");
+            } catch (err) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              const parsed = handleApiError(err, "Não foi possível desconectar o Strava.");
+              setStravaError(parsed.message);
+            } finally {
+              setDisconnectingStrava(false);
+            }
+          },
+        },
+      ]
+    );
+  }
 
   async function handlePasswordChange() {
     if (!senhaAtual || !novaSenha || !confirmacaoSenha) {
@@ -130,6 +206,99 @@ export default function AlunoPerfilScreen() {
             )}
 
             <Text style={styles.userId}>ID: {user?.id || "N/A"}</Text>
+          </Card>
+
+          {/* Integração com Strava (US-14) */}
+          <Card variant="elevated" padding="lg" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.stravaIconBox}>
+                <Activity size={20} color="#fc5200" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.stravaTitleRow}>
+                  <Text style={styles.sectionTitle}>Strava</Text>
+                  {loadingStrava ? (
+                    <ActivityIndicator size="small" color="#fc5200" />
+                  ) : stravaStatus?.conectado && !stravaStatus?.expirado ? (
+                    <Badge tone="success" icon={<CheckCircle2 size={12} color={colors.success.dark} />}>
+                      Conectado
+                    </Badge>
+                  ) : stravaStatus?.expirado ? (
+                    <Badge tone="warning" icon={<AlertCircle size={12} color={colors.warning.dark} />}>
+                      Expirado
+                    </Badge>
+                  ) : (
+                    <Badge tone="neutral">Desconectado</Badge>
+                  )}
+                </View>
+                <Text style={styles.stravaSubtitle}>
+                  Sincronização de treinos e métricas esportivas
+                </Text>
+              </View>
+            </View>
+
+            {stravaError && (
+              <View style={styles.errorBanner}>
+                <AlertCircle size={16} color={colors.danger.base} />
+                <Text style={styles.errorText}>{stravaError}</Text>
+              </View>
+            )}
+
+            {stravaSuccess && (
+              <View style={styles.successBanner}>
+                <CheckCircle2 size={16} color={colors.success.base} />
+                <Text style={styles.successText}>{stravaSuccess}</Text>
+              </View>
+            )}
+
+            {stravaStatus?.conectado && !stravaStatus?.expirado ? (
+              <View style={styles.stravaConnectedBox}>
+                <View style={styles.athleteInfoRow}>
+                  <Text style={styles.athleteLabel}>Atleta conectado:</Text>
+                  <Text style={styles.athleteName}>{stravaStatus.nomeAtleta || "Atleta Strava"}</Text>
+                </View>
+                <Text style={styles.stravaConnectedDesc}>
+                  Suas atividades do Strava serão importadas automaticamente ao finalizar treinos para preencher distâncias, tempos e batimentos com um toque.
+                </Text>
+                <Button
+                  title="Desconectar Strava"
+                  variant="secondary"
+                  size="sm"
+                  loading={disconnectingStrava}
+                  onPress={handleDisconnectStrava}
+                  style={styles.disconnectButton}
+                />
+              </View>
+            ) : stravaStatus?.expirado ? (
+              <View style={styles.stravaExpiredBox}>
+                <Text style={styles.stravaExpiredText}>
+                  Sua conexão com o Strava expirou. Reconecte sua conta para continuar sincronizando automaticamente.
+                </Text>
+                <Button
+                  title="Reconectar Strava"
+                  variant="primary"
+                  size="md"
+                  loading={connectingStrava}
+                  onPress={handleConnectStrava}
+                  style={styles.stravaConnectButton}
+                />
+              </View>
+            ) : (
+              <View style={styles.stravaDisconnectedBox}>
+                <Text style={styles.sectionDesc}>
+                  Conecte sua conta do Strava para importar automaticamente o ritmo, frequência cardíaca, distância e tempo das suas corridas, pedaladas ou natação para suas sessões.
+                </Text>
+                <Button
+                  title="Conectar Strava"
+                  variant="primary"
+                  size="md"
+                  icon={<Zap size={18} color={colors.surface} />}
+                  loading={connectingStrava}
+                  onPress={handleConnectStrava}
+                  style={styles.stravaConnectButton}
+                />
+              </View>
+            )}
           </Card>
 
           {/* Cartão de Alteração de Senha (RN-002) */}
@@ -319,5 +488,79 @@ const styles = StyleSheet.create({
   },
   logoutCard: {
     marginTop: spacing.xs,
+  },
+
+  /* Estilos da Integração Strava */
+  stravaIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.control,
+    backgroundColor: "#fff4ef",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stravaTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stravaSubtitle: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[500],
+    marginTop: 2,
+  },
+  stravaConnectedBox: {
+    backgroundColor: colors.background,
+    borderRadius: radii.control,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  athleteInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: spacing.xs,
+  },
+  athleteLabel: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[500],
+  },
+  athleteName: {
+    fontFamily: fonts.bold,
+    fontSize: typography.sizes.body,
+    color: colors.ink[900],
+  },
+  stravaConnectedDesc: {
+    fontFamily: fonts.regular,
+    fontSize: typography.sizes.caption,
+    color: colors.ink[600],
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  disconnectButton: {
+    alignSelf: "flex-start",
+  },
+  stravaDisconnectedBox: {
+    marginTop: 2,
+  },
+  stravaConnectButton: {
+    backgroundColor: "#fc5200",
+  },
+  stravaExpiredBox: {
+    backgroundColor: colors.warning.light,
+    borderRadius: radii.control,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning.base,
+  },
+  stravaExpiredText: {
+    fontFamily: fonts.medium,
+    fontSize: typography.sizes.caption,
+    color: colors.warning.dark,
+    lineHeight: 18,
+    marginBottom: spacing.md,
   },
 });
