@@ -269,7 +269,7 @@ gymnasion_app/
 
 O projeto será implementado em **6 fases bem delineadas**:
 
-### Fase 1: Fundação & Setup do Ambiente (Concluída ✅)
+### Fase 1: Fundação & Setup do Ambiente (Concluída)
 * [x] Inicializar o projeto Expo na pasta `gymnasion_app` com TypeScript (Expo SDK 58 + Expo Router).
 * [x] Configurar Expo Router, SafeAreaProvider e SplashScreen.
 * [x] Carregar as fontes oficiais do Google Fonts (`Plus Jakarta Sans` via `@expo-google-fonts/plus-jakarta-sans`).
@@ -280,7 +280,7 @@ O projeto será implementado em **6 fases bem delineadas**:
 * [x] Criar layout e tela inicial de Login em `app/(auth)/login.tsx` com validações, toggle de senha e suporte ao bloqueio RN-010.
 * [x] Estruturar navegação inferior (Bottom Tabs) para a Área do Aluno (`app/(aluno)`) e Personal (`app/(personal)`).
 
-### Fase 2: Componentes Core do Design System (Concluída ✅)
+### Fase 2: Componentes Core do Design System (Concluída)
 * [x] **`Button`**: Variantes `primary`, `secondary`, `ghost`, `danger`, tamanhos `sm`/`md`/`lg`, suporte a ícone, feedback tátil (`expo-haptics`) e estado `loading`.
 * [x] **`FormField`**: Label semântica, validação com borda vermelha e mensagem de erro, suporte a ícones, hint e toggle dinâmico de senha.
 * [x] **`Badge`**: Variações de tons (`success`, `warning`, `danger`, `neutral`, `info`, `primary`) com dot indicador e tipografia oficial.
@@ -291,7 +291,7 @@ O projeto será implementado em **6 fases bem delineadas**:
 * [x] **`EmptyState`**: Apresentação de estados vazios reais sem dados hardcoded.
 * [x] **Galeria Design System (`app/modal.tsx`)**: Vitrine visual interativa de todos os componentes acessível diretamente no app.
 
-### Fase 3: Autenticação & Roteamento Inteligente (Concluída ✅)
+### Fase 3: Autenticação & Roteamento Inteligente (Concluída)
 * [x] **`AuthContext` & `SecureStore`**: Inicialização silenciosa de sessão com encriptação nativa no hardware e sincronização de token.
 * [x] **Tela de Login (`/login`)**: Validações de campos obrigatórios, toggle de senha, feedback tátil e tratamento em tempo real do bloqueio temporário (RN-010 com contagem regressiva em minutos e segundos).
 * [x] **Redirecionamento Inteligente pós-login**:
@@ -301,12 +301,14 @@ O projeto será implementado em **6 fases bem delineadas**:
 * [x] **Ação de Logout Global**: Limpeza profunda de cache, destruição de credenciais no `SecureStore` e redirecionamento instantâneo via `router.replace` para `/(auth)/login`.
 * [x] **Alteração de Senha Segura (`/perfil`)**: Integração com `PATCH /api/usuarios/me/senha` com validação de política de senha forte (RN-002: maiúscula, minúscula, número e símbolo).
 
-### Fase 4: Área do Aluno (MVP Central para Mobile) (Concluída ✅)
+### Fase 4: Área do Aluno (MVP Central para Mobile) (Concluída)
 * [x] **Painel Inicial (`(aluno)/index`)**:
   * Consumo de perfil (`GET /api/alunos/me`) e rotina ativa (`GET /api/alunos/rotinas`).
-  * Card do **Treino de Hoje** em destaque com tag de modalidade, duração prevista e botão "Iniciar Treino Agora".
-  * Alerta inteligente de RPE pendente com disparo de modal para avaliação pós-treino.
-  * Fita de consistência semanal (Seg a Dom) com indicadores dinâmicos do dia atual.
+  * 4 KPI cards superiores: Sessões finalizadas, Frequência semanal, RPE médio e Semana da rotina ativa.
+  * Card da **Próxima Sessão / Treino do Dia** com bloco de data laranja, tag de modalidade, preview de atividade e botões duplos "Ver sessão" e "Finalizar sessão".
+  * Fita de consistência semanal (Seg a Dom) com indicadores dinâmicos do dia atual e status concluído/planejado.
+  * Preview do gráfico dinâmico em linha vetorial suave (`SvgLineChart`) da evolução do aluno.
+  * Card com feedbacks recentes do personal trainer e métricas solicitadas.
 * [x] **Lista de Treinos & Semanas (`(aluno)/treinos`)**:
   * Navegação interativa entre semanas da rotina (`GET /api/alunos/rotinas/{id}/planejamento`).
   * Listagem de sessões com data planejada, exercícios previstos e badges de status (`PLANEJADA` / `CONCLUIDA`).
@@ -326,7 +328,7 @@ O projeto será implementado em **6 fases bem delineadas**:
   * Alteração de senha conectada ao `PATCH /api/usuarios/me/senha` (RN-002).
   * Logout com encerramento de sessão no SecureStore.
 
-### Fase 5: Área do Personal Trainer no Mobile (Concluída ✅)
+### Fase 5: Área do Personal Trainer no Mobile (Concluída)
 * [x] **Dashboard (`(personal)/index`):**
   * Estatísticas gerais em Grid 2x2 (alunos ativos, pendentes, turmas cadastradas, pendências de métricas).
   * Painel de aprovações pendentes com decisão rápida (Aprovar / Recusar) e feedback tátil (`expo-haptics`).
@@ -352,7 +354,7 @@ O projeto será implementado em **6 fases bem delineadas**:
   * Alteração de senha conectada ao `PATCH /api/usuarios/me/senha` com validação de política forte (RN-002).
   * Encerramento de sessão seguro via SecureStore.
 
-### Fase 6: Polimento Mobile, Notificações & Build (Concluída ✅)
+### Fase 6: Polimento Mobile, Notificações & Build (Concluída)
 * [x] **Pull-to-refresh nativo** em todas as listagens de treinos, evolução, alunos, turmas, rotinas e dashboard.
 * [x] **Feedback tátil (`expo-haptics`)** em todas as ações-chave (iniciar treino, toggle de exercício, botão de descanso, submissão de RPE, aprovação/recusa de aluno e cópia de link).
 * [x] **Notificações (`expo-notifications`)**:
@@ -370,9 +372,13 @@ O projeto será implementado em **6 fases bem delineadas**:
 1. **PROIBIDO DADOS ESTÁTICOS / HARDCODED:**
    * Todas as listagens, perfis e execuções devem consumir os serviços conectados à API Spring Boot.
    * Utilizar esqueletos de carregamento (Skeletons) e Empty States reais para listas vazias.
-2. **Tratamento Resiliente de Erros:**
+2. **PROIBIDO O USO DE EMOJIS NA INTERFACE (UI, COPY E NOTIFICAÇÕES):**
+   * **Nenhuma tela, componente, texto, título, botão, card, modal, notificação ou feedback deve conter emojis**.
+   * Toda comunicação visual e hierarquia deve ser feita **exclusivamente através dos ícones vetoriais oficiais da biblioteca `lucide-react-native`** e dos componentes semânticos do Design System (`Badge`, `SportTag`, `Avatar`, `Button`, etc.).
+   * A identidade visual do Gymnasion deve ser elegante, minimalista e profissional, alinhada aos tokens de design do Figma Gymnasion v2.
+3. **Tratamento Resiliente de Erros:**
    * Erros de rede ou validação do back-end devem ser apresentados ao usuário através de Toasts ou alertas claros mapeados do RFC 7807 (`ProblemDetail.detail`).
-3. **Ergonomia e Acessibilidade:**
+4. **Ergonomia e Acessibilidade:**
    * Altura mínima de toque de 44x44 dp para botões e links.
    * Suporte a teclado virtual sem cobrir inputs (`KeyboardAvoidingView`).
    * Respeito às áreas seguras de todos os aparelhos (`SafeAreaView`).

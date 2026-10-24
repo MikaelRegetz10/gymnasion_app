@@ -63,7 +63,7 @@ export const notificationService = {
 
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: "Hora do seu treino! 🏋️‍♂️",
+          title: "Hora do seu treino!",
           body: "Seu corpo agradece a consistência. Abra o Gymnasion e confira a rotina de hoje!",
           sound: true,
           data: { tipo: "LEMBRETE_TREINO" },
@@ -92,7 +92,7 @@ export const notificationService = {
 
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: "Tempo de descanso encerrado! ⏱️",
+          title: "Tempo de descanso encerrado!",
           body: "Pronto para a próxima série? Mantenha o foco!",
           sound: true,
           data: { tipo: "TIMER_DESCANSO" },

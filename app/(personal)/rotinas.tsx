@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Dumbbell, Calendar, Users, Eye } from "lucide-react-native";
+import { Dumbbell, Calendar, Users, Eye, Target } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
 import { colors, fonts, radii, spacing, typography } from "@/src/theme/tokens";
@@ -116,9 +116,12 @@ export default function RotinasScreen() {
 
                 {/* Objetivos */}
                 {Boolean(rotina.objetivos) && (
-                  <Text style={styles.objetivosText} numberOfLines={2}>
-                    🎯 {rotina.objetivos}
-                  </Text>
+                  <View style={styles.objetivosRow}>
+                    <Target size={14} color={colors.primary[500]} />
+                    <Text style={styles.objetivosText} numberOfLines={2}>
+                      {rotina.objetivos}
+                    </Text>
+                  </View>
                 )}
 
                 {/* Alunos Vinculados */}
@@ -241,11 +244,17 @@ const styles = StyleSheet.create({
   modalidadeRow: {
     flexDirection: "row",
   },
+  objetivosRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   objetivosText: {
     fontFamily: fonts.regular,
     fontSize: typography.sizes.caption,
     color: colors.ink[600],
     lineHeight: 18,
+    flex: 1,
   },
   alunosContainer: {
     paddingTop: spacing.xs,

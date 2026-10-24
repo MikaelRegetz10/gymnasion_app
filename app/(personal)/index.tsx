@@ -178,7 +178,7 @@ export default function PersonalDashboardScreen() {
             />
             <View style={styles.userText}>
               <Text style={styles.greeting}>
-                Olá, {perfil?.nome ? perfil.nome.split(" ")[0] : "Treinador"} 👋
+                Olá, {perfil?.nome ? perfil.nome.split(" ")[0] : "Treinador"}
               </Text>
               <Badge
                 tone="info"

@@ -8,7 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { X, Calendar, Dumbbell, ChevronRight, AlertCircle } from "lucide-react-native";
+import { X, Calendar, Dumbbell, ChevronRight, AlertCircle, Info } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
 import { colors, fonts, radii, spacing, typography } from "@/src/theme/tokens";
@@ -182,8 +182,9 @@ export default function RoutinePlanModal({
                       {/* Orientações */}
                       {Boolean(parsed.orientations) && (
                         <View style={styles.orientationsBox}>
+                          <Info size={13} color={colors.warning.dark} style={{ marginTop: 2 }} />
                           <Text style={styles.orientationsText}>
-                            💡 {parsed.orientations}
+                            {parsed.orientations}
                           </Text>
                         </View>
                       )}
@@ -377,12 +378,16 @@ const styles = StyleSheet.create({
     color: colors.ink[500],
   },
   orientationsBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
     marginTop: spacing.sm,
     backgroundColor: colors.warning.light,
     padding: spacing.sm,
     borderRadius: radii.control,
   },
   orientationsText: {
+    flex: 1,
     fontFamily: fonts.medium,
     fontSize: typography.sizes.tiny,
     color: colors.warning.dark,

@@ -312,7 +312,7 @@ export default function AlunoHomeScreen() {
           >
             <Avatar name={studentName} size="md" tone="primary" />
             <View style={styles.userText}>
-              <Text style={styles.greeting}>Olá, {studentName.split(" ")[0]}! 👋</Text>
+              <Text style={styles.greeting}>Olá, {studentName.split(" ")[0]}!</Text>
               <Text style={styles.dateSubtitle}>{formatHeaderDate()}</Text>
               <Text style={styles.personalSubtitle}>Treinador: {personalName}</Text>
             </View>
@@ -500,7 +500,7 @@ export default function AlunoHomeScreen() {
               </Card>
             ) : (
               <Card variant="outlined" padding="lg" style={styles.noWorkoutCard}>
-                <Text style={styles.noWorkoutTitle}>Todas as sessões concluídas! 🎉</Text>
+                <Text style={styles.noWorkoutTitle}>Todas as sessões concluídas!</Text>
                 <Text style={styles.noWorkoutDesc}>
                   Você finalizou os treinos planejados desta semana. Bom descanso!
                 </Text>

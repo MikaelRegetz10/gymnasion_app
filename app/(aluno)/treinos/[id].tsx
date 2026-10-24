@@ -114,7 +114,7 @@ export default function SessionDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setFinishModalVisible(false);
       Alert.alert(
-        "Treino Concluído! 🏆",
+        "Treino Concluído!",
         "Seus resultados e percepção de esforço foram salvos e enviados ao seu Personal Trainer.",
         [{ text: "OK", onPress: () => loadSession() }]
       );
@@ -293,7 +293,7 @@ export default function SessionDetailScreen() {
       <Modal visible={finishModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.checkoutSheet}>
-            <Text style={styles.checkoutTitle}>Concluir Treinamento 🏁</Text>
+            <Text style={styles.checkoutTitle}>Concluir Treinamento</Text>
             <Text style={styles.checkoutSubtitle}>
               Confirme a duração real e como se sentiu durante o treino.
             </Text>

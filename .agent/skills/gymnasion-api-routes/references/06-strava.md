@@ -192,9 +192,9 @@ Fluxo do componente `StravaCallbackPage`:
     * Mapeadas diretamente pelo `campoStrava` configurado na métrica.
     * Para métricas legadas (`campoStrava = null`), utiliza fallback heurístico seguro por palavras-chave (`distancia`, `km`, `tempo`, etc.).
     * Métricas exclusivas do personal (`quemPreenche === PERSONAL`) que vierem preenchidas do Strava são exibidas travadas para edição do aluno e gravadas automaticamente no backend ao concluir a sessão.
-    * Campos que vieram do Strava ganham tag `⚡ Strava` e permanecem editáveis pelo aluno.
+    * Campos que vieram do Strava ganham tag `Strava` e permanecem editáveis pelo aluno.
     * Métricas obrigatórias que não vierem no Strava (ex: FC média nula) permanecem vazias com aviso de preenchimento manual obrigatório.
-  * O aluno pode optar por `"✍️ Não importar do Strava (Preencher manualmente)"` a qualquer momento.
+  * O aluno pode optar por `"Não importar do Strava (Preencher manualmente)"` a qualquer momento.
 
 ---
 

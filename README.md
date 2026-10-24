@@ -1,4 +1,4 @@
-# Gymnasion Mobile App 📱🏋️
+# Gymnasion Mobile App
 
 Aplicativo mobile oficial da plataforma **Gymnasion**, construído com **React Native**, **Expo SDK 58**, **Expo Router** e **TypeScript**.
 
@@ -6,7 +6,7 @@ O app consome a API REST Spring Boot oficial do ecossistema Gymnasion e traduz a
 
 ---
 
-## 🎯 Arquitetura & Stack Tecnológica
+## Arquitetura & Stack Tecnológica
 
 * **Framework:** React Native 0.88 + Expo SDK 58 (Expo Router v58).
 * **Linguagem:** TypeScript 5.8 (tipagem estrita, 0 erros).
@@ -25,7 +25,7 @@ O app consome a API REST Spring Boot oficial do ecossistema Gymnasion e traduz a
 
 ---
 
-## 🚀 Como Executar o Projeto
+## Como Executar o Projeto
 
 ### 1. Pré-requisitos
 * Node.js (>= 20)
@@ -62,7 +62,7 @@ npx expo start
 
 ---
 
-## 📦 Como Gerar os Builds (EAS Build)
+## Como Gerar os Builds (EAS Build)
 
 O projeto possui o arquivo `eas.json` pronto com os perfis `development`, `preview` e `production`:
 
@@ -85,7 +85,7 @@ eas build --platform all --profile production
 
 ---
 
-## 📋 Status das Fases de Desenvolvimento
+## Status das Fases de Desenvolvimento
 
 * [x] **Fase 1: Fundação & Setup do Ambiente Expo SDK 58**
 * [x] **Fase 2: Componentes Core do Design System (Button, FormField, Badge, SportTag, Avatar, Card, EmptyState)**
